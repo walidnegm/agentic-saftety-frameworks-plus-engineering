@@ -14,15 +14,32 @@ This framework operationalizes adversarial verification, multi-LLM separation of
 
 ## The shape of the framework
 
-- **Four disciplines** — PPRE (Plan → Pushback → Revisit → Execute), assume-compromise verification, behavior pinning via regression tests, symptom-to-root with codebase-wide invariant audit. The disciplines do not enforce themselves; they are activated through agents.
-- **Eighteen agents in six lifecycle buckets** — Planning & Specification, Execution, Verification, Coherence, Runtime Stabilization, Operational Plumbing. Each bucket is a coordination boundary; agents within and across buckets carry the disciplines.
-- **Central Factory Supervisor** — orchestrator above all agents that owns the work registry, enforces global invariants, routes events, synchronizes context across LLM A (planning) and LLM B (execution), and escalates only when judgment is required.
+**Primitives** (the four concepts to internalize):
+
+- **PPRE** — Plan → Pushback → Revisit → Execute. A four-step gating cycle for every non-trivial workstream. Each letter prevents a named failure mode: single-author planning, sycophantic review, hesitation in revisit, serial execution.
+- **Assume-compromise** — system-wide posture in which every artifact is treated as potentially flawed until it has survived independent adversarial verification at four layers (proposal, implementation, runtime, post-merge).
+- **Behavior pinning** — every change ships with a regression test that pins the *shape of the contract*, not solely the absence of the immediate defect.
+- **Symptom-to-root with codebase-wide invariant audit** — a reported symptom is the entry point to a root invariant; every fix sweeps the codebase for peer violations and pins the invariant globally, not just at the symptom site.
+
+**Supporting mechanisms**:
+
+- **Eighteen agents in six lifecycle buckets** — Planning & Specification, Execution, Verification, Coherence, Runtime Stabilization, Operational Plumbing. Each bucket is a coordination boundary; agents enforce the primitives at specific layers and stages.
+- **Central Factory Supervisor** — orchestrator above all agents that owns a Postgres-backed work registry, enforces global invariants as state-transition predicates, synchronizes context across LLM A (planning) and LLM B (execution), and escalates only when judgment is required.
 - **CDID, not CI/CD** — Concurrent Development, Integration, and Deployment. Many independent changes coexist in different stages — design, implementation, verification, deploy — at once, without losing coherence.
-- **Continuous code dosing** — once releases are continuous, deployments stop being events and become an infusion. Rollout pacing, monitoring, dose-response attribution, and incident response all change.
+- **Continuous code dosing with change-type routing** — once releases are continuous, deployments stop being events and become an infusion. But not every change ships the same way: features still need flag-ramp + acceptance, architectural refactors still need full PPRE + human review, hygiene runs continuously only when external behavior is preserved. The framework's value is in routing each change to the rollout discipline its blast radius warrants.
+- **Refactor discipline** — agentic velocity lowers the cost of refactoring, but does not eliminate the need for refactoring discipline. Mechanical cleanup runs continuously; architectural refactors require full PPRE; speculative "cleaner-but-no-measurable-benefit" refactors are avoided.
 
 ## The core thesis
 
 Velocity and rigor are not adversaries. The factory engineers them as the same property: speed is a function of how aggressively verification machinery can run in parallel with development, and safety is a function of how many independent verification streams a change has survived. The framework is also independent of context-window size — even infinite-context LLMs need to be agentified to be accountable.
+
+## Worked examples in the spec
+
+The full spec includes concrete walkthroughs:
+
+- **PPRE in action** — a diagnosis-loop case where the initial plan was wrong and pushback corrected it before any code was written.
+- **Symptom-to-root** — a 500 traced through API → gRPC → engine code, root invariant identified, codebase-wide audit (4 sites, 1 unguarded), and a global behavior pin written.
+- **Supervisor work-registry record** — a concrete JSON shape for an Epic in flight, with status transitions encoded as predicates the daemon evaluates.
 
 ## Who this is for
 
