@@ -259,7 +259,20 @@ Five things change:
 - **Dose-response attribution is harder.** When metric X drifts up 2% over a day, was it the prompt change at T-3h, the new feature flag at T-7h, the bug fix at T-14h, or the migration at T-20h? Single-deploy incident response assumes one suspect; code-dosing incident response means the hypothesis space is the last N changes weighted by blast radius.
 - **Side effects accumulate.** Three code doses can each be safe individually but produce a regression in combination. "What changed?" stops being a single-shot question and becomes a layered audit across a sliding window.
 
-Three agent roles carry the operational load: the Observability Agent (§10.6) attributes anomalies to specific recent doses with confidence intervals, the Live Debugging Agent (§10.5) reads code, runtime traces, and change history together at the dose's timescale, and the Feature Flag Agent (§10.6) provides the per-feature dose-tuning surface that makes "stop the drip on this one flag" a one-command operation. Incident response is no longer an event triggered by a release — it is a continuous practice woven into the deployment itself.
+**Not every change ships the same way.** Continuous dosing is the default for most work, but it does not mean every change enters production through an identical pipe. The factory classifies each change by intent, user visibility, reversibility, and blast radius, and routes accordingly:
+
+| Category | Primary goal | Control mechanism | Default rollout |
+|---|---|---|---|
+| **Feature** | change user capability | flag + ramp + product acceptance | staged / flag-ramped |
+| **Performance** | improve speed, cost, throughput | metric guardrail with regression thresholds | continuous, measured |
+| **Reliability** | reduce failure rate | behavior pin + (sometimes) urgent path | continuous, expedited |
+| **Hygiene** | reduce entropy (dead code, duplicates, naming, lint, dependency cleanup) | static checks + small reversible PRs | continuous, background |
+| **Architecture** | improve structure (service split, schema redesign, auth-boundary change) | full PPRE + human review | staged, heavily reviewed |
+| **Security** | reduce exposure (auth bug, permission issue, secret leak) | urgent gate + audit, sometimes flag-protected | controlled urgent |
+
+The hygiene rule: hygiene work runs continuously *only* when it preserves external behavior. Dead-code removal, naming cleanup, dependency upgrades, test hardening, and lint fixes qualify; anything that could change user-visible output, error semantics, or contract behavior does not. The framework's value is in routing each change to the rollout discipline its blast radius warrants — not in shipping everything continuously.
+
+Three agent roles carry the operational load across all categories: the Observability Agent (§10.6) attributes anomalies to specific recent doses with confidence intervals, the Live Debugging Agent (§10.5) reads code, runtime traces, and change history together at the dose's timescale, and the Feature Flag Agent (§10.6) provides the per-feature dose-tuning surface that makes "stop the drip on this one flag" a one-command operation. Incident response is no longer an event triggered by a release — it is a continuous practice woven into the deployment itself.
 
 > **Aspirational vs. operationally practiced.** None of the five properties above are operationally practiced in most current platforms, even though their prerequisites typically exist. Feature flags exist but the discipline to "stop the drip" on a single flag in minutes does not; the runbook is missing. Observability exists but not auto-attribution of anomalies to recent doses with confidence intervals. Change history exists (git) but is not consumed as a dose-weighted hypothesis-space ranking when an incident fires. The framework's value lies precisely in formalizing and automating these properties — not in asserting they are already met. Implementation-state tracking is deferred to platform-specific companion documents.
 
