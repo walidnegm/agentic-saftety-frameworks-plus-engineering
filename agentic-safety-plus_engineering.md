@@ -69,11 +69,13 @@ The framework rests on a small number of premises and yields a small number of o
 **Four disciplines** convert raw agent parallelism into trustworthy throughput:
 
 - **PPRE** — Plan → Pushback → Revisit → Execute. A four-step gating cycle for every non-trivial workstream, terminating in execution only after the plan has survived independent critique.
-- **Assume-compromise verification** — system-wide posture in which every artifact is treated as potentially flawed until it has survived independent adversarial verification at *multiple* layers: proposal (PPRE pushback), implementation (behavior pinning), runtime (Reality-Anchor), and post-merge (Reflection Loop). PPRE's pushback step is one instance of this posture; the posture is system-wide, not gate-specific.
+- **Assume-compromise** — system-wide posture in which every artifact is treated as potentially flawed until it has survived independent adversarial verification at *multiple* layers: proposal (PPRE pushback), implementation (behavior pinning), runtime (Reality-Anchor), and post-merge (Reflection Loop). PPRE's pushback step is one instance of this posture; the posture is system-wide, not gate-specific.
 - **Behavior pinning** — every change ships with a regression test that pins the shape of the contract, not solely the absence of the immediate defect.
 - **Symptom-to-root** — a reported symptom is treated as the entry point to a root architectural finding, not as a target for patching.
 
 The disciplines do not enforce themselves. They are activated through a cast of specialized agents — eighteen in total, grouped into **six buckets** by lifecycle stage. Each bucket is a coordination boundary; the disciplines flow through agents within and across buckets. A Central Factory Supervisor sits above all agents, owns the work registry, enforces global invariants, and routes events between agents. The human is the functional architect — strategic direction and architectural inflection — not the implementer.
+
+> **Primitives vs. supporting mechanisms.** The four disciplines above are the **primitives** the reader should internalize — they recur throughout the document and shape every agent's behavior. The agents (Reality-Anchor, Reflection Loop, Hygiene, Conflict Prediction, Semantic Merge, and the other thirteen) and the Supervisor itself are the **supporting mechanisms** that enforce the primitives at specific layers and lifecycle stages. Hold the four primitives in working memory; the mechanisms can be looked up.
 
 
 **Six agent buckets** organized by lifecycle stage:
@@ -214,7 +216,7 @@ Once the artifact is non-deterministic in this way, the engineering discipline r
 
 The biggest implication for how tests are written: **behaviors are tested, not functional activities.** Traditional functional testing assumes a deterministic spec — given input X, expect output Y, pass/fail per case. That works for `is_even(4) == True`. It does not work for an agent that classifies a customer message into a workflow path. The same message with the same context can resolve to different paths; the right answer is fuzzy; the failure mode is "confidently wrong" rather than "crashed."
 
-A concrete example. Suppose an agent reads a user's text against a rubric and returns a structured score in [0, 100]. The traditional functional test would assert `score(text="…") == 73`. That test fails intermittently for reasons unrelated to whether the agent is correct, and passes when the agent is subtly wrong but happens to produce 73. The behavioral test instead asserts: across 100 runs of the same text under realistic prompt variants, *the score converges to a band of [70, 76], the rationale references the same set of pinned weaknesses present in the text, and no run hallucinates a new evaluation criterion not listed in the rubric*. Different question, different answer, different test apparatus.
+A concrete example. An agent renders a project-health widget on a dashboard. The spec says: "display health (red/yellow/green) with a short explanation." The agent honors that contract — but improvises in places the spec didn't lock down. On one render the widget is left-aligned, on the next center-aligned. On one the explanation sits below the indicator, on the next beside it. On one the bullets in the explanation are ordered by recency, on the next by severity, on the third by the order the LLM happened to emit them. The traditional functional test (`widget.color in {red,yellow,green}`, explanation field is non-empty) passes every time. The behavioral test asserts something the unit test cannot express: across 100 renders of the same project state under realistic prompt variants, *layout is stable (same alignment, same vertical placement of indicator vs. explanation), bullet ordering follows a fixed rule, and no explanation is truncated mid-sentence*. The agent operates inside a latitude the spec did not constrain; the behavioral test is the only mechanism that surfaces drift in that latitude before users notice the inconsistency.
 
 Test cases are designed for behavioral distributions: ranges, convergence, absences ("no run produces X"), reference-set consistency — not single-value equality. The Functional / Scenario Modeler (§10.3) is the agent that makes this kind of test tractable to author at velocity. The formal name for the underlying mindset shift in safety-engineering literature is SOTIF (ISO 21448 — Safety of the Intended Functionality), developed by the autonomous-vehicle community to verify intended functionality under stochastic policies. The framework adopts the mindset.
 
@@ -274,22 +276,31 @@ PPRE is the factory's central provocation. The four words look procedural, but e
 - **Plan — distributed, not authored.** In a human team, "plan" is a single architect's document. In the factory, planning is a distributed act: Backlog, Epic Designer, Architecture Review, and Costing contribute parallel inputs to a structured proposal — diagnosis, proposed change, affected surface, verification strategy, blast radius, out-of-scope list, surface claim for the work registry. The plan is the consensus artifact of distributed planning, not one agent's draft. The failure mode it prevents: *single-author planning*, where one model's framing locks in unexamined assumptions before pushback can land.
 - **Pushback — adversarial isolation, not collegial review.** An independent reviewer (LLM A planning layer, Safety Audit, an external pass, or the human) critiques the plan in a fresh session *without* seeing the author's reasoning trace. Adversarial isolation is what prevents the reviewer from agreeing with whichever framing reads as smarter. Pushback surfaces hidden assumptions, mis-scoped lifts, missing edge cases, and architectural ripple effects while changing direction is still cheap. The failure mode it prevents: *sycophantic review*, where the reviewer agrees with a plausible-sounding plan instead of evaluating it.
 - **Revisit — converge, do not hesitate.** Revisit is the discipline of taking pushback seriously and *moving*: revise the plan, or defend the original with new evidence, then advance. The failure mode it prevents is the inverse of pushback's: *hesitation* — accepting all pushback unconditionally (sycophancy at the author layer), looping on the same critique, or freezing the workstream entirely. The Supervisor monitors revisit cycles and forces escalation if the plan does not converge after a bounded number of rounds. Revisit ≠ hesitate; revisit ends.
-- **Execute — parallel, against the approved spec.** Implementation begins only after the plan has survived pushback, and execution itself is parallel: multiple coding pods may take the approved Epic on isolated worktrees, generating against the same spec; their output is reconciled by the Supervisor (semantic merge, behavior-pin verification) before merge. Every commit traces back to the approved plan; mid-flight deviations reopen PPRE rather than being silently absorbed. The failure mode it prevents: *serial execution*, where the cycle's velocity collapses to a single pod's throughput and CDID's parallelism is forfeited at the last step.
+- **Execute — parallel across stages, not only coding.** "Execute" is the end-to-end realization of the approved plan, not the act of typing code. It spans four stages — *implementation* (multiple coding pods on isolated worktrees generating against the spec), *verification* (scenario-corpus runs, behavior-pin synthesis, security-audit replay), *deployment* (dose ramp, feature-flag tuning, rollout-phase gates), and *post-merge audit* (Reflection Loop). Each stage runs in parallel where dependencies allow, and the Supervisor reconciles results across stages (semantic merge, pin verification, deploy gates) before the plan is declared complete. Every commit, test outcome, audit finding, and deploy event traces back to the approved plan; mid-flight deviations at any stage reopen PPRE rather than being silently absorbed. The failure mode it prevents: *serial execution at any stage* — coding pods running one at a time, the scenario corpus blocked behind a single runner, deploys waiting for the previous one to finish, post-merge audit run only weekly — any of which collapses CDID's parallelism at the corresponding stage. (CDID describes cross-Epic concurrency; Execute describes within-Epic stage parallelism. Both are real and both are required.)
 
 PPRE catches errors at the cheapest layer (the proposal) instead of the most expensive (production). It is the inverse of "fail fast through working code"; it is "fail at the proposal so working code is never wrong in the first place." The four named failure modes — single-author planning, sycophantic review, hesitation in revisit, serial execution — are each a distinct way the cycle collapses without the named guardrail.
 
+**Worked example.** A user-visible bug surfaces — repeated failed save attempts on an option-picker UI, with the system re-prompting the user with the identical option list after each selection, no progress, no error message that points at the cause. The cycle:
+
+- **Plan.** A diagnostic agent inspects the conversation log, observes the user repeatedly selecting an option from the same list, observes the system rejecting each selection with the identical re-prompt, and proposes: *the user's tenant has zero records in the option lookup table; the picker is reading from a global catalog while the validator scopes its check to the tenant.* Plan: seed the tenant's lookup table or relax the validator's scope.
+- **Pushback.** An independent reviewer rejects the plan: *"the picker is supposed to read from the platform catalog and the validator is supposed to accept anything from that catalog — the cross-tenant scope is the design, not the bug. Something else is broken."* The plan does not advance.
+- **Revisit.** The original diagnoser re-reads the validator code in light of the pushback and finds the gate: `if effective_id == 'PLACEHOLDER' or effective_id == '': reject`. The placeholder sentinel happens to be the *real id* of one legitimate option in the catalog — so any user picking that option is rejected as if they had not picked anything. The cycle is forced by id collision, not by tenant scope.
+- **Execute.** A targeted gate change plus a tracking flag for explicit user resolution; backwards-compatible with in-flight state from the old code.
+
+Without the Pushback step, the original (wrong) diagnosis would have shipped. The fix would still have stopped the user-visible loop — but the *stated reason* would have hidden the actual root cause and left the placeholder collision unaddressed in any structurally similar gate elsewhere.
+
 > **Implementation:** a `/ppre-plan` skill that orchestrates distributed planning across reviewer subagents in parallel, invokes adversarial reviewers in fresh sessions (no parent context), enforces a bounded-revisit convergence policy, and parallelizes execution across pod-isolated worktrees. A PreToolUse hook on Edit/Write refuses code-modifying operations unless an approved plan file with a survived-pushback marker exists for the workstream.
 
-### 9.2 Assume-compromise verification (system-wide adversarial posture)
+### 9.2 Assume-compromise (system-wide posture)
 
-The factory's stance toward every artifact is "this might be wrong." Trust is built by surviving adversarial verification at multiple layers, not granted by default. PPRE's pushback step (§9.1) is one instance of the posture; the posture is system-wide and operates at four layers:
+Where PPRE is a gate, assume-compromise is a stance — applied wherever an artifact is produced or evaluated, not only at plan time. The posture operates at four layers:
 
 - **Proposal layer** — the Architecture Review Agent (LLM A) and Safety & Security Audit Agent adversarially review every plan. Findings are blocking; a plan with unresolved findings does not advance.
 - **Implementation layer** — every change ships with a behavior pin (§9.3). The merge gate verifies the pin exists and passes. The pin codifies *why* the fix is correct, not just that it is.
 - **Runtime layer** — the Reality-Anchor (Watcher) monitors active agent sessions for drift, hallucinated artifacts, and sycophantic agreement against pinned facts; intervenes mid-execution.
 - **Post-merge layer** — Reflection Loop agents re-audit merged work daily, looking for sycophancy and context-collapse failures that escaped earlier gates.
 
-Distinct from PPRE because the posture is *not* a gate, it is a stance applied wherever an artifact is produced or evaluated. PPRE has a Pushback step *because* the posture mandates one; the posture also mandates the runtime Watcher, the merge gate, and the post-merge audit.
+PPRE's Pushback step is one instance the posture mandates; the runtime Watcher, the merge gate, and the post-merge audit are the others.
 
 > **Implementation:** read-only reviewer subagents (`architect-reviewer`, `safety-auditor`) invoked in fresh sessions without the author's reasoning trace — adversarial isolation prevents sycophancy. Their findings are appended to the plan file. The Supervisor enforces the four-layer posture by refusing to advance state when any layer's verification has not run.
 
@@ -323,6 +334,15 @@ The discipline therefore requires four steps, not two:
 4. **Pin the invariant globally** with a regression test or static check that detects future violations regardless of which file introduces them — turning a one-time fix into a structural guard.
 
 Step 4 is what converts "fix the bug" into "make the bug class impossible." The pin lives in the regression corpus alongside the per-fix pins from §9.3, but its scope is the invariant rather than the original symptom site. The Hygiene Agent (§10.5) consumes the resulting global-invariant set for proactive scans on its nightly sweep — finding violations of the invariant before any user reports a symptom.
+
+**Worked example.** A user reports a 500 on a results-rendering page. The upstream API surfaces a generic "engine error" with no detail. Walking the four steps:
+
+1. **Trace.** API logs show a gRPC INTERNAL response from a downstream numeric-processing service. The downstream service's logs surface the actual exception: `AttributeError: 'numpy.float64' object has no attribute 'isna'` at `service.py:78`. The line: `per_unit = pd.to_numeric(table.get('cost'), errors='coerce'); fallback_mask = per_unit.isna() | (per_unit <= 0)`.
+2. **Root invariant.** When the column is absent, `table.get('cost')` returns `None`; `pd.to_numeric(None, errors='coerce')` returns a *scalar* `numpy.float64` nan, not a Series. The scalar has no `.isna()` method. The invariant violated: *every conditional-column read in the service must defend against absence — either by guarding with `if col in table.columns` or by passing an explicit `pd.Series(default, index=table.index)` as the `.get()` default. The `.isna()` step assumes a Series; the code path that produces a scalar is not handled.*
+3. **Find all sites.** Codebase-wide search across the service for `pd.to_numeric(<frame>.get(`. Four call sites total. Three already use the explicit-Series-default pattern. One does not — the unguarded site is the bug.
+4. **Pin globally.** A regression test that synthesizes an input frame *without* the optional column and asserts every public callable in the service handles it without `AttributeError`. The pin's scope is the invariant ("conditional-column reads must not assume Series type"), not the original symptom site. A future call site that introduces the unguarded pattern fails the pin even if the original site was never touched.
+
+Step 3 is what the framework adds beyond a traditional symptom→fix loop: in stochastic code generation, *partial fixes* — one site patched, identical violations elsewhere left untouched — are the default failure mode rather than the exception, and an explicit audit-all-sites step is the only thing that closes them. Step 4 is what makes the fix structural rather than local.
 
 > **Implementation:** a `/symptom-to-root` skill that, given a reported symptom, (1) traces it through the codebase layer-by-layer to a root-cause finding, (2) issues a codebase-wide search for structurally similar violation sites, and (3) emits a list of all sites plus a proposed global pin into the PPRE plan. The plan cannot advance until the human or Architecture Review Agent has either confirmed all sites are in scope or explicitly deferred specific sites with linked backlog items. No silent partial fixes.
 
@@ -389,7 +409,45 @@ The Supervisor is the central nervous system. It is not a coding agent and never
 - **Assurance** — guarantees no artifact or decision is lost in the parallel execution graph. Every plan, pushback, revision, commit, test result, audit finding, and deploy event is durable and traceable.
 - **Human escalation** — the Supervisor recognizes when a decision exceeds its authority (architectural inflection, strategic priority, ambiguous intent, unresolved coherence negotiation) and escalates to the human coordinator with a complete context package.
 
-> **Implementation:** the Supervisor is a long-running daemon (not a chat session) built on top of an agent SDK. It receives events from a queue (Postgres `LISTEN/NOTIFY` or a thin webhook receiver), routes them to subagents via the SDK's programmatic API, and persists every decision to a structured audit table. Global invariants are predicates the daemon evaluates before transitioning state. The daemon is the one piece of infrastructure most agent SDKs do not provide out of the box; it has to be built (~2-3 weeks for an MVP).
+**The work-registry record (concrete shape).** The Supervisor's authority rests on the work registry — every Epic in flight is one row, persisted, queryable, and the source of truth for surface claims, status transitions, and base-SHA staleness. A registry record looks like this:
+
+```json
+{
+  "epic_id": "epic_2026_05_04_a3f9",
+  "title": "Refactor session lifecycle for multi-tenant isolation",
+  "status": "ppre_approved",
+  "base_sha": "a8c1f3d2e9b4...",
+  "created_at": "2026-05-04T13:08:22Z",
+  "ppre": {
+    "plan_path": ".plans/epic_2026_05_04_a3f9.approved.md",
+    "pushback_findings": [],
+    "pushback_resolved_at": "2026-05-04T14:23:11Z",
+    "revisit_rounds": 2
+  },
+  "surface_claim": {
+    "files":   ["api/services/session.py", "api/routers/auth.py"],
+    "tables":  ["sessions", "session_events"],
+    "services":["api"],
+    "prompt_keys": []
+  },
+  "blast_radius": "medium",
+  "owners": ["pod_3"],
+  "execute": {
+    "pin_required": true,
+    "pin_path": "regression_suite/test_session_lifecycle.py",
+    "pin_status": "drafted",
+    "pods_active": ["pod_3"],
+    "deploy_phase": null
+  },
+  "next_action": "execute"
+}
+```
+
+Status transitions are predicates the daemon evaluates: `draft → ppre_approved` requires `pushback_findings = []` and `revisit_rounds ≤ MAX_ROUNDS`; `ppre_approved → executing` requires no surface intersection with another active claim (or a documented sequence/split/negotiate resolution); `executing → mergeable` requires `pin_status = "passing"`; `merged → closed` requires `deploy_phase = "completed"` and an Observability Agent attribution window with no unattributed anomalies. Stale-plan invalidation: if `base_sha` is no longer reachable from `main` because another Epic merged a touching commit, the record reverts to `draft` and PPRE reopens.
+
+The schema is intentionally small. Most coordination work the Supervisor does is consulting and updating this record — the rest of its complexity is event routing, not data model.
+
+> **Implementation:** the Supervisor is a long-running daemon (not a chat session) built on top of an agent SDK. It receives events from a queue (Postgres `LISTEN/NOTIFY` or a thin webhook receiver), routes them to subagents via the SDK's programmatic API, and persists every decision to a structured audit table. Global invariants are predicates the daemon evaluates before transitioning state. The daemon is the one piece of infrastructure most agent SDKs do not provide out of the box; it has to be built.
 
 ---
 
@@ -409,6 +467,10 @@ The human founder remains in the central coordination role.
 ---
 
 ## 13. Radical differences from traditional methods
+
+The framework's commitments differ from traditional Agile and Waterfall practice along sixteen distinct dimensions. The contrasts are not incremental refinements; in most rows the traditional and agentic approaches answer entirely different questions, because the underlying production model has changed — stochastic artifacts, emergent flow, machine-paced cadence, and engineered (rather than implicit) trust each rewrite a different assumption that traditional methods rest on.
+
+The table below is a reference card. Each row names the dimension, the traditional default, the framework's commitment, and the enforcing mechanism that makes the commitment operative. The rightmost column is the load-bearing one: without an enforcing mechanism, every commitment is aspirational. §14 follows with a different and more useful comparison for an audience already working in agentic tools — against existing open-source agent frameworks (LangGraph, CrewAI, AutoGen, MetaGPT).
 
 | # | Dimension | Traditional Agile / Waterfall | Agentic Safety Plus: Engineering | Enforcing mechanism |
 |---|---|---|---|---|
