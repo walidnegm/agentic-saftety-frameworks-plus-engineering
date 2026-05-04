@@ -272,6 +272,18 @@ Five things change:
 
 The hygiene rule: hygiene work runs continuously *only* when it preserves external behavior. Dead-code removal, naming cleanup, dependency upgrades, test hardening, and lint fixes qualify; anything that could change user-visible output, error semantics, or contract behavior does not. The framework's value is in routing each change to the rollout discipline its blast radius warrants — not in shipping everything continuously.
 
+**Refactor when the code creates measurable drag, not because it can be refactored.** Agentic velocity lowers the cost of refactoring; it does not eliminate the need for refactoring discipline. The factory should refactor when accumulated entropy creates measurable drag, risk, duplication, unclear ownership, or future-change cost — not because an agent can do it cheaply. Refactor types are routed by the same blast-radius logic:
+
+| Refactor type | Continuous? | Rule |
+|---|---|---|
+| **Mechanical cleanup** | Yes | Formatting, dead code, unused imports, obvious duplicate removal |
+| **Local simplification** | Usually | Small module, clear tests, no public behavior change |
+| **Performance refactor** | Yes, with metrics | Must prove a measurable latency, cost, or throughput improvement |
+| **Architectural refactor** | No | Requires full PPRE, surface claim, human and Architecture Review |
+| **Speculative refactor** | Avoid | "Cleaner" with no measurable benefit; opens churn without paying for itself |
+
+This is what distinguishes a well-run factory from one that runs in circles cleaning code that did not need cleaning. The Hygiene Agent (§10.5) surfaces candidate refactors and opens backlog items; it does not block on them. The human or Architecture Review Agent decides whether each candidate clears the "measurable drag" bar before it consumes a coding pod's cycle.
+
 Three agent roles carry the operational load across all categories: the Observability Agent (§10.6) attributes anomalies to specific recent doses with confidence intervals, the Live Debugging Agent (§10.5) reads code, runtime traces, and change history together at the dose's timescale, and the Feature Flag Agent (§10.6) provides the per-feature dose-tuning surface that makes "stop the drip on this one flag" a one-command operation. Incident response is no longer an event triggered by a release — it is a continuous practice woven into the deployment itself.
 
 > **Aspirational vs. operationally practiced.** None of the five properties above are operationally practiced in most current platforms, even though their prerequisites typically exist. Feature flags exist but the discipline to "stop the drip" on a single flag in minutes does not; the runbook is missing. Observability exists but not auto-attribution of anomalies to recent doses with confidence intervals. Change history exists (git) but is not consumed as a dose-weighted hypothesis-space ranking when an incident fires. The framework's value lies precisely in formalizing and automating these properties — not in asserting they are already met. Implementation-state tracking is deferred to platform-specific companion documents.
